@@ -1,0 +1,147 @@
+---
+title: "ANALYSE DISCRIMINANTE LINEAIRE"
+author: "Aminata FALL"
+date: "`r Sys.Date()`"
+output: rmdformats::readthedown
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+Dans ce document, nous allons réaliser une analyse discriminante linéaire sur une base de données. Le but de cette analyse de construire un modèle qui permettra d'avoir la séparation la plus nette possible entre deux groupes d'individus grâce à des combinaisons linéaires de variables explicatives. 
+Dans notre base de données les individus que l'on souhaite séparer sont ce qui ronflent et ceux qui ne ronflent pas avec à l'aide de leur âge, poids, taille, sexe, consommation en alcool et tabac.
+
+<br>
+
+# **CHARGEMENT DES LIBRAIRIES NECESSAIRES**
+
+```{r message=FALSE, warning=FALSE}
+library(MASS)
+library(ggplot2)
+library(psych)
+library(klaR) 
+
+```
+
+# **IMPORTATION DES DONNEES**
+
+```{r message=FALSE, warning=FALSE}
+data <- read.table(file=file.choose(), header=TRUE)
+```
+
+```{r}
+attach(data)
+```
+La fonction attach() permettra d'utiliser directement le nom des variables dans les commandes. 
+
+# **VISUALISATION ET APERCU DE LA BASE DE DONNEES**
+
+```{r}
+str(data)
+```
+
+
+```{r}
+n = 1000
+age <- rnorm(n)
+poids <- rnorm(n)
+alcool <- rnorm(n)
+taille <- rnorm(n)
+sexe <- rnorm(n)
+tabac <- rnorm(n)
+score <- age+poids+taille+alcool+sexe+tabac
+c50 <- quantile(score, .50)
+ronfle <- ifelse(score>=c50, 0, 1)
+df <- data.frame(data)
+
+pairs.panels(df, digits = 3, pch = 21,
+             bg=c("yellow","purple")[factor(df$ronfle)])
+```
+
+Le graph nous donne des histogrammes et des nuages de points qui représentent les valeurs prises par la varible ronfle en fonction de chaque variable explicative et les coefficients de corrélation. Ce qui ressort est qu'il n'y a pas une forte corrélation entre le ronflement et les différentes variables prises individuellement.
+
+# **PREPARATION DE LA BASE DE DONNEES**
+
+D'abord on centre les données quantitatives pour s'assurer que les variables ont toutes la même variance.
+```{r}
+data[1:4] <- scale(data[1:4])
+```
+
+Vérifions que pour chaque variable indépendante mean=0 et sd=1
+```{r}
+apply(data[1:4], 2, mean)
+ apply(data[1:4], 2, sd)
+```
+
+Ensuite on scinde notre base de données en deux. Un échantillon sur lequel on réalisera l'analyse discriminante (70%) et un échantillon sur lequel on testera notre modèle(30%).
+```{r}
+set.seed(1)
+sample <- sample(c(TRUE, FALSE), nrow(data), replace=TRUE, prob=c(0.7,0.3))
+ train <- data[sample, ]
+ test <- data[!sample, ] 
+```
+
+# **CONSTRUCTION DU MODELE**
+
+```{r}
+linear <- lda(ronfle~., data=train)
+linear
+```
+
+INTERPRETATION: 
+Le résultat de l'analyse linéaire montre que seul 67% des individus de la base de données ne ronfle pas.
+Etant donnée l'analyse n'a été effectuée que sur deux groupes, on obtient qu'un seul coefficient (LD1).
+Le coefficient linéaire nous montre quelle variable affecte le plus la séparation des deux groupes d'individus. 
+Dans ce contexte, l'alcool est le facteur le plus déterminant avec le coefficient le plus élevé, ensuite vient l'âge. 
+
+```{r}
+p <- predict(linear, train) 
+ldahist(data = p$x[,1], g = train$ronfle)
+```
+
+INTERPRETATION:
+
+Ces histogrammes se basent sur LD1 et montre que les deux groupes(N et O) se chevauchent, il n'y a pas de séparation claires entre les individus qui ronflent et ceux qui ne ronflent pas. 
+
+```{r}
+train$ronfle=as.factor(train$ronfle)
+partimat(train[1:4],grouping=train$ronfle,method="lda",main="Partition Plot",prec=100)
+```
+
+INTERPRETATION:
+
+"Partition plot" est un autre graph qui permet de mieux représenter la séparation ou pas de nos deux groupes pour chaque variable.
+Là on remarque aussi qu'on n'a pas une démarcation claire entre ceux qui ronflent et ceux qui ne ronflent pas pour chaque combinaison de variables explicatives.
+
+# **ESTIMATION DU TAUX DE MAUVAIS CLASSEMENT**
+
+Maintenant vérifions la performance de notre modèle.
+```{r}
+p1 <- predict(linear, train)$class
+tab <- table(Predicted = p1, Actual = train$ronfle)
+tab
+```
+
+Dans l'échantillon sur lequel on travaille, le nombre de classifications correctes est de 42+9=51
+
+```{r}
+sum(diag(tab))/sum(tab)
+```
+La précision du modèle est d'environ 0,75. Donc le taux de mauvais classement est de 0,25.
+
+
+# **PREVISION**
+
+```{r}
+p2 <- predict(linear, test)$class
+tab1 <- table(Predicted = p2, Actual = test$ronfle)
+tab1
+```
+
+Dans notre échantillon test, le nombre de classification correctes est de 13+5=18
+```{r}
+sum(diag(tab1))/sum(tab1)
+
+```
+La précision du modèle construit sur l'échantillon test est d'environ 0,56. Ce qui veut dire que si le modèle construit est reproduit sur un autre jeu de données, il ne pourra pas faire une très bonne prédiction.
+
